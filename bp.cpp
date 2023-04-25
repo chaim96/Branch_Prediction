@@ -1,6 +1,5 @@
 /* 046267 Computer Architecture - Winter 20/21 - HW #1                  */
 /* This file should hold your implementation of the predictor simulator */
-
 #include "bp_api.h"
 #include <cmath>
 #include <vector>
@@ -74,33 +73,27 @@ private:
     vector<FSM*> GlobalTable;
     int HT = -1;
     SIM_stats status;
-
     //return value -  The theoretical size of the TBT
     uint32_t calcTheoreticalSize();
 
 public:
     BP() = default;
     void init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
-       bool isGlobalHist, bool isGlobalTable, int Shared);
+              bool isGlobalHist, bool isGlobalTable, int Shared);
     BP(BP const&) = delete; // disable copy ctor
     void operator=(BP const&) = delete; // disable = operator
-    ~BP();
+    ~BP() = default;
     static BP& getInstance() // make singleton
     {
         static BP instance; // Guaranteed to be destroyed.
         // Instantiated on first use.
         return instance;
     }
-
-
-/***
- * Predict - this function predicts if branch is taken or not taken
- * @param pc - the branch instruction's pointer.
- * @param dst - the destination for the predicted action.
- *                 pc+4 if NT and target if taken.
- * @return prediction - false if NOT TAKEN, true if TAKEN
- */
-    bool Predict(uint32_t pc, uint32_t *dst);
+    int getTag(uint32_t pc);
+    int getIndex(uint32_t pc);
+    bool predict(uint32_t pc, uint32_t *dst);
+    void fillStatus(SIM_stats *curStats);
+    void erase();
 };
 
 
@@ -196,7 +189,7 @@ void BP::init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned
 };
 
 
-BP::~BP()
+void BP::erase()
 {
     if (!LocalTables.empty())
     {
@@ -220,28 +213,79 @@ BP::~BP()
 }
 
 
-bool BP::Predict(uint32_t pc, uint32_t *dst)
+int BP::getTag(uint32_t pc)
 {
-    //TODO: add methods for each case and update status.br_num
-    switch (HT) {
-    //both local
-    case 0:
+    int shift = log2((double)(btbSize))+2;
+    unsigned mask = ((1 << tagSize) - 1) << shift;
+    return (pc&mask) >> shift;
+}
 
-    break;
-    //Hist local Table global
-    case 1:
 
-    break;
-    //Hist Global Table local
-    case 10:
+int BP::getIndex(uint32_t pc)
+{
+    int bitSizeOfBTB = log2((double)(btbSize));
+    unsigned mask = ((1 << bitSizeOfBTB) - 1) << 2;
+    return (pc&mask) >> 2;
+}
 
-    break;
-    //both global
-    case 11:
 
-    break;
+bool BP::predict(uint32_t pc, uint32_t *dst) {
+    int tag = getTag(pc);
+    int index = getIndex(pc);
+    if (Tags[index] != tag) {
+        *dst = pc + 4;
+        return false;
     }
-    return true;
+    if (isHistGlobal) {
+        if (isTableGlobal) {
+            if (GlobalTable[GlobalHistory]->getPredict() == ST ||
+                GlobalTable[GlobalHistory]->getPredict() == SNT) {
+                *dst = pc + 4;
+                return false;
+            } else {
+                *dst = Targets[index];
+                return true;
+            }
+        } else {
+            if (LocalTables[index][GlobalHistory]->getPredict() == ST ||
+                LocalTables[index][GlobalHistory]->getPredict() == SNT) {
+                *dst = pc + 4;
+                return false;
+            } else {
+                *dst = Targets[index];
+                return true;
+            }
+        }
+    } else {
+        if (isTableGlobal) {
+            if (GlobalTable[LocalHistories[index]]->getPredict() == ST ||
+                GlobalTable[LocalHistories[index]]->getPredict() == SNT) {
+                *dst = pc + 4;
+                return false;
+            } else {
+                *dst = Targets[index];
+                return true;
+            }
+        } else {
+            if (LocalTables[index][LocalHistories[index]]->getPredict() == ST ||
+                LocalTables[index][LocalHistories[index]]->getPredict() == SNT) {
+                *dst = pc + 4;
+                return false;
+            } else {
+                *dst = Targets[index];
+                return true;
+            }
+        }
+    }
+}
+
+
+void BP::fillStatus(SIM_stats *curStats)
+{
+    (*curStats).size = status.size;
+    (*curStats).br_num = status.br_num;
+    (*curStats).flush_num = status.flush_num;
+    return;
 }
 
 
@@ -249,26 +293,6 @@ bool BP::Predict(uint32_t pc, uint32_t *dst)
  * Main Functions
  **********************************************/
 
-
-/***
- * Update - update predictor with actual decision
- * @param pc - the branch instruction's pointer.
- * @param targetPc - the branch instruction's pointer.
- */
-    void Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
-
-    }
-/***
- * GetStatus - returns the Simulator's status in curStats
- * @param curStats - pointer to return the Simulator's stat.
- */
-    void GetStatus(SIM_stats *curStats)
-{
-    //{ *curStats = status; }
-
-};
-
-/****** GIVEN FUNCTIONS ******/
 
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
             bool isGlobalHist, bool isGlobalTable, int Shared) {
@@ -281,20 +305,22 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
     return 0;
 }
 
+
 bool BP_predict(uint32_t pc, uint32_t *dst)
 {
     BP& bp = BP::getInstance();
-    int mask = 1 >> bp
-    int Instruction_tag = pc <<
-    return false;
+    return bp.predict(pc, dst);
 }
+
 
 void BP_update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
     return;
 }
 
+
 void BP_GetStats(SIM_stats *curStats) {
+    BP& bp = BP::getInstance();
+    bp.fillStatus(curStats);
+    bp.erase();
     return;
 }
-
-
