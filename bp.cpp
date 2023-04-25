@@ -64,7 +64,7 @@ private:
 
     //return value -  The theoretical size of the TBT
     uint32_t calcTheoreticalSize() {
-        uint32_t size = btbSize * (tagSize + ADDRESS_SIZE);
+        uint32_t size = btbSize * (tagSize + ADDRESS_SIZE); //todo: check if 32 or 30
         uint32_t globalHistSize = historySize;
         uint32_t localHistSize = btbSize * historySize;
         uint32_t globalTblSize = pow(2, historySize) * BIMODAL_SIZE;
@@ -102,10 +102,10 @@ public:
 
         //History init
         if (isHistGlobal) {
-            LocalHistories.push_back(0b0000);
+            LocalHistories.push_back(0);
         } else {
             for (int i = 0; i < btbSize; ++i) {
-                LocalHistories.push_back(0b0000);
+                LocalHistories.push_back(0);
             }
         }
 
