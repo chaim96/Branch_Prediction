@@ -1,3 +1,3 @@
-C:/Users/990sh/OneDrive - Technion/Semester 6/Computer Architecture/HW/HW1/cmake-build-debug/CMakeFiles/HW1.dir
-C:/Users/990sh/OneDrive - Technion/Semester 6/Computer Architecture/HW/HW1/cmake-build-debug/CMakeFiles/edit_cache.dir
-C:/Users/990sh/OneDrive - Technion/Semester 6/Computer Architecture/HW/HW1/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/tmp/Branch_Prediction/cmake-build-debug/CMakeFiles/edit_cache.dir
+/tmp/Branch_Prediction/cmake-build-debug/CMakeFiles/rebuild_cache.dir
+/tmp/Branch_Prediction/cmake-build-debug/CMakeFiles/HW1.dir
