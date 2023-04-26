@@ -109,6 +109,8 @@ public:
     void erase();
 
     void Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst);
+
+    void CropHistory(unsigned index);
 };
 
 
@@ -243,7 +245,7 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
     }
     if (isHistGlobal) {
         if (isTableGlobal) {
-            if (GlobalTable[GlobalHistory]->getPredict() == ST ||
+            if (GlobalTable[GlobalHistory]->getPredict() == WNT ||
                 GlobalTable[GlobalHistory]->getPredict() == SNT) {
                 *dst = pc + 4;
                 return false;
@@ -252,8 +254,7 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
                 return true;
             }
         } else {
-            //TODO: check if meant to write WNT instead of ST
-            if (LocalTables[index][GlobalHistory]->getPredict() == ST ||
+            if (LocalTables[index][GlobalHistory]->getPredict() == WNT ||
                 LocalTables[index][GlobalHistory]->getPredict() == SNT) {
                 *dst = pc + 4;
                 return false;
@@ -264,8 +265,7 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
         }
     } else {
         if (isTableGlobal) {
-            //TODO: SAME as ABOVE
-            if (GlobalTable[LocalHistories[index]]->getPredict() == ST ||
+            if (GlobalTable[LocalHistories[index]]->getPredict() == WNT ||
                 GlobalTable[LocalHistories[index]]->getPredict() == SNT) {
                 *dst = pc + 4;
                 return false;
@@ -274,8 +274,7 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
                 return true;
             }
         } else {
-            //TODO: SAME as ABOVE
-            if (LocalTables[index][LocalHistories[index]]->getPredict() == ST ||
+            if (LocalTables[index][LocalHistories[index]]->getPredict() == WNT ||
                 LocalTables[index][LocalHistories[index]]->getPredict() == SNT) {
                 *dst = pc + 4;
                 return false;
@@ -284,6 +283,19 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
                 return true;
             }
         }
+    }
+}
+
+
+void BP::CropHistory(unsigned index){
+    uint32_t mask=0;
+    if(!isHistGlobal) {
+        mask = ((1 << historySize) - 1);
+        LocalHistories[index] &= mask;
+    }
+    else{
+        mask = ((1 << historySize) - 1);
+        GlobalHistory &= mask;
     }
 }
 
@@ -305,6 +317,7 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
         case 0:
             isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
             LocalHistories[index] |= uint32_t (taken);
+            CropHistory(index);
             isOverride ? LocalTables[LocalHistories[index]][index]->setPredict(fsmState)
                        : LocalTables[LocalHistories[index]][index]->UpdatePredict(taken);
             break;
@@ -312,24 +325,27 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
         case 1:
             isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
             LocalHistories[index] |= uint32_t (taken);
+            CropHistory(index);
             isOverride ? GlobalTable[LocalHistories[index]]->setPredict(fsmState)
                        : GlobalTable[LocalHistories[index]]->UpdatePredict(taken);
             break;
             //Hist Global Table local
         case 10:
-            GlobalHistory <<= 1; //todo: check if can be override
+            GlobalHistory <<= 1;
             GlobalHistory |= uint32_t (taken);
+            CropHistory(0);
             isOverride ? LocalTables[index][GlobalHistory]->setPredict(fsmState)
                        : LocalTables[index][GlobalHistory]->UpdatePredict(taken);
-
             break;
             //both global
         case 11:
-            GlobalHistory <<= 1; //todo: check if can be override
+            GlobalHistory <<= 1;
             GlobalHistory |= uint32_t (taken);
-            GlobalTable[GlobalHistory]->UpdatePredict(taken); //todo: check if can be override
+            CropHistory(0);
+            GlobalTable[GlobalHistory]->UpdatePredict(taken);
             break;
     }
+
 }
 
 
@@ -352,7 +368,6 @@ void BP::fillStatus(SIM_stats *curStats) {
 
 int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned fsmState,
             bool isGlobalHist, bool isGlobalTable, int Shared) {
-
     BP &bp = BP::getInstance();
     if (&bp == nullptr) {
         return -1;
