@@ -32,7 +32,10 @@ public:
 
     State getPredict() { return predict; }
 
-    void setPredict(State pred) { predict = pred; }
+    void setPredict(State pred, bool isTaken) {
+        predict = pred;
+        UpdatePredict(isTaken);
+    }
 
     void UpdatePredict(bool isTaken) {
         switch (predict) {
@@ -157,9 +160,9 @@ void BP::init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned
     this->historySize = historySize;
     this->tagSize = tagSize;
     this->fsmState = static_cast<State>(fsmState);
-    this->isHistGlobal = isHistGlobal;
-    this->isTableGlobal = isTableGlobal;
-    this->isShare = isShare;
+    this->isHistGlobal = isGlobalHist;
+    this->isTableGlobal = isGlobalTable;
+    this->isShare = Shared;
 
     //Tags and Target init
     for (unsigned i = 0; i < btbSize; ++i) {
@@ -288,7 +291,7 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
 
 
 void BP::CropHistory(unsigned index){
-    uint32_t mask=0;
+    uint32_t mask;
     if(!isHistGlobal) {
         mask = ((1 << historySize) - 1);
         LocalHistories[index] &= mask;
@@ -299,18 +302,21 @@ void BP::CropHistory(unsigned index){
     }
 }
 
-
 void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
     status.br_num++;
-    if ((!taken && pred_dst != pc + 4) || (taken && pred_dst != targetPc)) status.flush_num++;
-
-
+    uint32_t dst;
+    Predict(pc, &dst);
     unsigned tag = getTag(pc);
     int index = getIndex(pc);
 
-    bool isOverride = (Tags[index] != tag);
+    if ((!taken && pred_dst != pc + 4) || (taken && pred_dst != targetPc)) status.flush_num++;
 
-    if (isOverride) Targets[index] = targetPc;
+
+
+    bool isOverride = (Tags[index] != tag);
+    if (isOverride) Tags[index] = tag;
+    if (isOverride || dst != Targets[index]) Targets[index] = targetPc;
+
 
     switch (HT) {
         //both local
@@ -318,7 +324,7 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
             isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
             LocalHistories[index] |= uint32_t (taken);
             CropHistory(index);
-            isOverride ? LocalTables[LocalHistories[index]][index]->setPredict(fsmState)
+            isOverride ? LocalTables[LocalHistories[index]][index]->setPredict(fsmState, taken)
                        : LocalTables[LocalHistories[index]][index]->UpdatePredict(taken);
             break;
             //Hist local Table global
@@ -326,7 +332,7 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
             isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
             LocalHistories[index] |= uint32_t (taken);
             CropHistory(index);
-            isOverride ? GlobalTable[LocalHistories[index]]->setPredict(fsmState)
+            isOverride ? GlobalTable[LocalHistories[index]]->setPredict(fsmState, taken)
                        : GlobalTable[LocalHistories[index]]->UpdatePredict(taken);
             break;
             //Hist Global Table local
@@ -334,7 +340,7 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
             GlobalHistory <<= 1;
             GlobalHistory |= uint32_t (taken);
             CropHistory(0);
-            isOverride ? LocalTables[index][GlobalHistory]->setPredict(fsmState)
+            isOverride ? LocalTables[index][GlobalHistory]->setPredict(fsmState, taken)
                        : LocalTables[index][GlobalHistory]->UpdatePredict(taken);
             break;
             //both global
