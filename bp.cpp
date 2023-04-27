@@ -84,6 +84,12 @@ private:
     //return value -  The theoretical size of the TBT
     uint32_t calcSize();
 
+    int getShareLsbIndex(int index, uint32_t pc);
+
+    int getShareMidIndex(int index, uint32_t pc);
+
+    int getIndexOfGlobalTable(int index, uint32_t pc);
+
 public:
     BP() = default;
 
@@ -146,6 +152,44 @@ uint32_t BP::calcSize() {
             return size + globalHistSize + globalTblSize;
     }
     return 0;
+}
+
+
+int BP::getShareLsbIndex(int index, uint32_t pc)
+{
+    unsigned mask = ((1 << historySize) - 1) << 2;
+    int component = (pc & mask) >> 2;
+    if (isHistGlobal)
+    {
+        return component^GlobalHistory;
+    }
+    return component^LocalHistories[index];
+}
+
+
+int BP::getShareMidIndex(int index, uint32_t pc)
+{
+    unsigned mask = ((1 << historySize) - 1) << 16;
+    int component = (pc & mask) >> 16;
+    if (isHistGlobal)
+    {
+        return component^GlobalHistory;
+    }
+    return component^LocalHistories[index];
+}
+
+
+int BP::getIndexOfGlobalTable(int index, uint32_t pc)
+{
+    if ((!isTableGlobal) || isShare)
+    {
+        return index;
+    }
+    if (isShare == 1)
+    {
+        return getShareLsbIndex(index, pc);
+    }
+    return getShareMidIndex(index, pc);
 }
 
 
@@ -242,14 +286,15 @@ int BP::getIndex(uint32_t pc) {
 bool BP::Predict(uint32_t pc, uint32_t *dst) {
     unsigned tag = getTag(pc);
     int index = getIndex(pc);
+    int indexOfGlobalTable = getIndexOfGlobalTable(index, pc);
     if (Tags[index] != tag) {
         *dst = pc + 4;
         return false;
     }
     if (isHistGlobal) {
         if (isTableGlobal) {
-            if (GlobalTable[GlobalHistory]->getPredict() == WNT ||
-                GlobalTable[GlobalHistory]->getPredict() == SNT) {
+            if (GlobalTable[indexOfGlobalTable]->getPredict() == WNT ||
+                GlobalTable[indexOfGlobalTable]->getPredict() == SNT) {
                 *dst = pc + 4;
                 return false;
             } else {
@@ -268,8 +313,8 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
         }
     } else {
         if (isTableGlobal) {
-            if (GlobalTable[LocalHistories[index]]->getPredict() == WNT ||
-                GlobalTable[LocalHistories[index]]->getPredict() == SNT) {
+            if (GlobalTable[indexOfGlobalTable]->getPredict() == WNT ||
+                GlobalTable[indexOfGlobalTable]->getPredict() == SNT) {
                 *dst = pc + 4;
                 return false;
             } else {
