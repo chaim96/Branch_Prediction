@@ -321,35 +321,38 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
     switch (HT) {
         //both local
         case 0:
+            isOverride ? LocalTables[index][LocalHistories[index]]->setPredict(fsmState, taken)
+                       : LocalTables[index][LocalHistories[index]]->UpdatePredict(taken);
             isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
             LocalHistories[index] |= uint32_t (taken);
             CropHistory(index);
-            isOverride ? LocalTables[LocalHistories[index]][index]->setPredict(fsmState, taken)
-                       : LocalTables[LocalHistories[index]][index]->UpdatePredict(taken);
             break;
             //Hist local Table global
         case 1:
+
+            isOverride ? GlobalTable[LocalHistories[index]]->setPredict(fsmState, taken)
+                       : GlobalTable[LocalHistories[index]]->UpdatePredict(taken);
             isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
             LocalHistories[index] |= uint32_t (taken);
             CropHistory(index);
-            isOverride ? GlobalTable[LocalHistories[index]]->setPredict(fsmState, taken)
-                       : GlobalTable[LocalHistories[index]]->UpdatePredict(taken);
             break;
             //Hist Global Table local
         case 10:
+
+            isOverride ? LocalTables[index][GlobalHistory]->setPredict(fsmState, taken)
+                       : LocalTables[index][GlobalHistory]->UpdatePredict(taken);
             GlobalHistory <<= 1;
             GlobalHistory |= uint32_t (taken);
             CropHistory(0);
-            isOverride ? LocalTables[index][GlobalHistory]->setPredict(fsmState, taken)
-                       : LocalTables[index][GlobalHistory]->UpdatePredict(taken);
             break;
             //both global
         case 11:
+            GlobalTable[GlobalHistory]->UpdatePredict(taken);
             GlobalHistory <<= 1;
             GlobalHistory |= uint32_t (taken);
             CropHistory(0);
-            GlobalTable[GlobalHistory]->UpdatePredict(taken);
             break;
+
     }
 
 }
