@@ -37,6 +37,8 @@ public:
         UpdatePredict(isTaken);
     }
 
+    void overridePredict(State pred) {predict = pred;}
+
     void UpdatePredict(bool isTaken) {
         switch (predict) {
             case SNT:
@@ -181,9 +183,13 @@ int BP::getShareMidIndex(int index, uint32_t pc)
 
 int BP::getIndexOfGlobalTable(int index, uint32_t pc)
 {
-    if ((!isTableGlobal) || isShare)
+    if ((!isTableGlobal) || isShare==0)
     {
-        return index;
+        if (isHistGlobal)
+        {
+            return GlobalHistory;
+        }
+        return LocalHistories[index];
     }
     if (isShare == 1)
     {
@@ -287,7 +293,7 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
     unsigned tag = getTag(pc);
     int index = getIndex(pc);
     int indexOfGlobalTable = getIndexOfGlobalTable(index, pc);
-    if (Tags[index] != tag) {
+    if ((Tags[index] != tag) || (Targets[index]==0)) {
         *dst = pc + 4;
         return false;
     }
@@ -349,8 +355,8 @@ void BP::CropHistory(unsigned index){
 
 void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
     status.br_num++;
-    uint32_t dst;
-    Predict(pc, &dst);
+/*    uint32_t dst;
+    Predict(pc, &dst);*/
     unsigned tag = getTag(pc);
     int index = getIndex(pc);
 
@@ -358,46 +364,61 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
 
 
 
-    bool isOverride = (Tags[index] != tag);
+    bool isOverride = (Tags[index] != tag) || (Targets[index]==0);
+    bool isNotSameDst = targetPc != Targets[index];
     if (isOverride) Tags[index] = tag;
-    if (isOverride || dst != Targets[index]) Targets[index] = targetPc;
+    if (isOverride || isNotSameDst) Targets[index] = targetPc;
 
+
+    int indexOfGlobalTable = getIndexOfGlobalTable(index, pc);
 
     switch (HT) {
         //both local
         case 0:
-            isOverride ? LocalTables[index][LocalHistories[index]]->setPredict(fsmState, taken)
-                       : LocalTables[index][LocalHistories[index]]->UpdatePredict(taken);
+            if (isOverride){
+                for (int i = 0; i < pow(2,historySize); ++i) {
+                    LocalTables[index][i]->overridePredict(fsmState);
+                }
+            }
+
+            LocalTables[index][LocalHistories[index]]->UpdatePredict(taken);
+
             isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
             LocalHistories[index] |= uint32_t (taken);
             CropHistory(index);
             break;
-            //Hist local Table global
+
+        //Hist local Table global
         case 1:
 
-            isOverride ? GlobalTable[LocalHistories[index]]->setPredict(fsmState, taken)
-                       : GlobalTable[LocalHistories[index]]->UpdatePredict(taken);
+            GlobalTable[indexOfGlobalTable]->UpdatePredict(taken);
+
             isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
             LocalHistories[index] |= uint32_t (taken);
             CropHistory(index);
             break;
-            //Hist Global Table local
+
+        //Hist Global Table local
         case 10:
+            if(isOverride) {
+                for (int i = 0; i < pow(2, historySize); ++i) {
+                    LocalTables[index][i]->overridePredict(fsmState);
+                }
+            }
+            LocalTables[index][GlobalHistory]->UpdatePredict(taken);
 
-            isOverride ? LocalTables[index][GlobalHistory]->setPredict(fsmState, taken)
-                       : LocalTables[index][GlobalHistory]->UpdatePredict(taken);
             GlobalHistory <<= 1;
             GlobalHistory |= uint32_t (taken);
             CropHistory(0);
             break;
-            //both global
+
+        //both global
         case 11:
-            GlobalTable[GlobalHistory]->UpdatePredict(taken);
+            GlobalTable[indexOfGlobalTable]->UpdatePredict(taken);
             GlobalHistory <<= 1;
             GlobalHistory |= uint32_t (taken);
             CropHistory(0);
             break;
-
     }
 
 }
@@ -429,9 +450,13 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
     bp.init(btbSize, historySize, tagSize, fsmState, isGlobalHist, isGlobalTable, Shared);
     return 0;
 }
-
-
+int i=0;
 bool BP_predict(uint32_t pc, uint32_t *dst) {
+    i++;
+    if(i==19){
+        int l=i;
+        //std::cout<<l;
+    }
     BP &bp = BP::getInstance();
     return bp.Predict(pc, dst);
 }
