@@ -380,6 +380,7 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
     }
 
     int indexOfGlobalTable = getIndexOfGlobalTable(index, pc);
+    index = getIndex(pc);
 
     //update
     switch (HT) {
