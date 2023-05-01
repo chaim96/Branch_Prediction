@@ -1,5 +1,6 @@
 /* 046267 Computer Architecture - Winter 20/21 - HW #1                  */
 /* This file should hold your implementation of the predictor simulator */
+/* Pass all tests                                                       */
 
 #include "bp_api.h"
 #include <cmath>
@@ -354,8 +355,6 @@ void BP::CropHistory(unsigned index){
 
 void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
     status.br_num++;
-/*    uint32_t dst;
-    Predict(pc, &dst);*/
     unsigned tag = getTag(pc);
     int index = getIndex(pc);
 
@@ -380,7 +379,6 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
     }
 
     int indexOfGlobalTable = getIndexOfGlobalTable(index, pc);
-    index = getIndex(pc);
 
     //update
     switch (HT) {
