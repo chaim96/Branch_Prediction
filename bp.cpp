@@ -462,7 +462,7 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
     bp.init(btbSize, historySize, tagSize, fsmState, isGlobalHist, isGlobalTable, Shared);
     return 0;
 }
-//int i=0;
+
 bool BP_predict(uint32_t pc, uint32_t *dst) {
 
     BP &bp = BP::getInstance();
