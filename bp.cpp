@@ -14,6 +14,10 @@ enum State {
     SNT, WNT, WT, ST
 };
 
+enum Share {
+    NOT_USING_SHARE, USING_SHARE_LSB, USING_SHARE_MID
+};
+
 #define ADDRESS_SIZE (32-2)
 #define BIMODAL_SIZE (2)
 
@@ -31,11 +35,6 @@ public:
     FSM(State predict) : predict(predict) {};
 
     State getPredict() { return predict; }
-
-    void setPredict(State pred, bool isTaken) {
-        predict = pred;
-        UpdatePredict(isTaken);
-    }
 
     void overridePredict(State pred) {predict = pred;}
 
@@ -71,7 +70,7 @@ private:
     State fsmState;
     bool isHistGlobal;
     bool isTableGlobal;
-    int isShare;
+    Share isShare;
     vector<uint32_t> Tags;
     vector<uint32_t> Targets;
     // Local
@@ -183,7 +182,7 @@ int BP::getShareMidIndex(int index, uint32_t pc)
 
 int BP::getIndexOfGlobalTable(int index, uint32_t pc)
 {
-    if ((!isTableGlobal) || isShare==0)
+    if ((!isTableGlobal) || isShare==NOT_USING_SHARE)
     {
         if (isHistGlobal)
         {
@@ -191,7 +190,7 @@ int BP::getIndexOfGlobalTable(int index, uint32_t pc)
         }
         return LocalHistories[index];
     }
-    if (isShare == 1)
+    if (isShare == USING_SHARE_LSB)
     {
         return getShareLsbIndex(index, pc);
     }
@@ -212,7 +211,7 @@ void BP::init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned
     this->fsmState = static_cast<State>(fsmState);
     this->isHistGlobal = isGlobalHist;
     this->isTableGlobal = isGlobalTable;
-    this->isShare = Shared;
+    this->isShare = static_cast<Share>(Shared);
 
     //Tags and Target init
     for (unsigned i = 0; i < btbSize; ++i) {
@@ -362,49 +361,59 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
 
     if ((!taken && pred_dst != pc + 4) || (taken && pred_dst != targetPc)) status.flush_num++;
 
-
-
     bool isOverride = (Tags[index] != tag) || (Targets[index]==0);
     bool isNotSameDst = targetPc != Targets[index];
     if (isOverride) Tags[index] = tag;
     if (isOverride || isNotSameDst) Targets[index] = targetPc;
 
 
+    //flush
+    if (isOverride){
+        if (!isHistGlobal)
+            LocalHistories[index] = 0;
+
+        if (!isTableGlobal){
+            for (int i = 0; i < pow(2, historySize); ++i) {
+                LocalTables[index][i]->overridePredict(fsmState);
+            }
+        }
+    }
+
     int indexOfGlobalTable = getIndexOfGlobalTable(index, pc);
 
+    //update
     switch (HT) {
         //both local
         case 0:
+            LocalTables[index][LocalHistories[index]]->UpdatePredict(taken);
             if (isOverride){
-                for (int i = 0; i < pow(2,historySize); ++i) {
-                    LocalTables[index][i]->overridePredict(fsmState);
-                }
+                LocalHistories[index] = taken;
+            }
+            else{
+                LocalHistories[index] <<= 1;
+                LocalHistories[index] |= uint32_t (taken);
+                CropHistory(index);
             }
 
-            LocalTables[index][LocalHistories[index]]->UpdatePredict(taken);
-
-            isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
-            LocalHistories[index] |= uint32_t (taken);
-            CropHistory(index);
             break;
 
         //Hist local Table global
         case 1:
-
             GlobalTable[indexOfGlobalTable]->UpdatePredict(taken);
 
-            isOverride ? LocalHistories[index] = taken : LocalHistories[index] <<= 1;
-            LocalHistories[index] |= uint32_t (taken);
-            CropHistory(index);
+            if(isOverride) {
+                LocalHistories[index] = taken;
+            }
+            else{
+                LocalHistories[index] <<= 1;
+                LocalHistories[index] |= uint32_t (taken);
+                CropHistory(index);
+            }
+
             break;
 
-        //Hist Global Table local
+            //Hist Global Table local
         case 10:
-            if(isOverride) {
-                for (int i = 0; i < pow(2, historySize); ++i) {
-                    LocalTables[index][i]->overridePredict(fsmState);
-                }
-            }
             LocalTables[index][GlobalHistory]->UpdatePredict(taken);
 
             GlobalHistory <<= 1;
@@ -412,14 +421,16 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
             CropHistory(0);
             break;
 
-        //both global
+            //both global
         case 11:
             GlobalTable[indexOfGlobalTable]->UpdatePredict(taken);
             GlobalHistory <<= 1;
             GlobalHistory |= uint32_t (taken);
             CropHistory(0);
+
             break;
     }
+
 
 }
 
@@ -450,13 +461,9 @@ int BP_init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned f
     bp.init(btbSize, historySize, tagSize, fsmState, isGlobalHist, isGlobalTable, Shared);
     return 0;
 }
-int i=0;
+//int i=0;
 bool BP_predict(uint32_t pc, uint32_t *dst) {
-    i++;
-    if(i==19){
-        int l=i;
-        //std::cout<<l;
-    }
+
     BP &bp = BP::getInstance();
     return bp.Predict(pc, dst);
 }
