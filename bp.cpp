@@ -72,6 +72,7 @@ private:
     bool isHistGlobal;
     bool isTableGlobal;
     Share isShare;
+    vector<uint32_t> validBit;
     vector<uint32_t> Tags;
     vector<uint32_t> Targets;
     // Local
@@ -214,10 +215,11 @@ void BP::init(unsigned btbSize, unsigned historySize, unsigned tagSize, unsigned
     this->isTableGlobal = isGlobalTable;
     this->isShare = static_cast<Share>(Shared);
 
-    //Tags and Target init
+    //validBit, Tags and Target init
     for (unsigned i = 0; i < btbSize; ++i) {
         Tags.push_back(0);
         Targets.push_back(0);
+        validBit.push_back(0);
     }
 
     //History init
@@ -293,7 +295,7 @@ bool BP::Predict(uint32_t pc, uint32_t *dst) {
     unsigned tag = getTag(pc);
     int index = getIndex(pc);
     int indexOfGlobalTable = getIndexOfGlobalTable(index, pc);
-    if ((Tags[index] != tag) || (Targets[index]==0)) {
+    if ((Tags[index] != tag) || (validBit[index]==0)) {
         *dst = pc + 4;
         return false;
     }
@@ -360,9 +362,10 @@ void BP::Update(uint32_t pc, uint32_t targetPc, bool taken, uint32_t pred_dst) {
 
     if ((!taken && pred_dst != pc + 4) || (taken && pred_dst != targetPc)) status.flush_num++;
 
-    bool isOverride = (Tags[index] != tag) || (Targets[index]==0);
+    bool isOverride = (Tags[index] != tag) || (validBit[index]==0);
     bool isNotSameDst = targetPc != Targets[index];
     if (isOverride) Tags[index] = tag;
+    if (validBit[index]==0) validBit[index]=1;
     if (isOverride || isNotSameDst) Targets[index] = targetPc;
 
 
